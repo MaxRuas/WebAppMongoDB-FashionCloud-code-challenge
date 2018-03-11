@@ -1,0 +1,3 @@
+#!/bin/sh
+#
+/usr/bin/mongod --shardsvr --fork --logpath /var/log/mongodb.log --logappend
