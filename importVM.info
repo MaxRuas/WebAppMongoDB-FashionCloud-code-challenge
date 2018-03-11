@@ -1,0 +1,288 @@
+Virtual Box used: 5.2.8 r121009 (Qt5.6.3)
+export format: Open virtualisation format 1.0
+
+I have decided to use Virtual-Box as you said I could use any tool I like and I am confortable with it also its totaly free. 
+Its a easy way to setup and clean up to the original state if desired all you need to do is make a snapshot.
+all code is configured all is needed is to import and start the VM.
+
+virtual-box ova files located in my google-drive. 
+https://drive.google.com/open?id=1QnMtGvINgaWpPsXw_FwVCuXt9txEz1zG
+https://drive.google.com/open?id=1AzJSePOdG0g3QlFzD1NIRq_M2-BjhQx6
+https://drive.google.com/open?id=14pBOEyeV2tYXhPgYG3IHXVLEZE6OAOV_
+
+For VirtualBox:
+To use host-only networking on VirtualBox, you will need to create and configure a new network from the VirtualBox preferences panel. Note that this may be called settings on some systems. Be sure that you're looking at the preferences for VirtualBox itself, not the settings configurations for a specific VM.
+Windows = Open the VirtualBox preferences panel and select the network section. Select Host-only Networks. Create a new network, and click the screwdriver icon to the side of the dialog to edit the network configuration. In the Adapter section, enter the following settings:
+Mac= Open the VirtualBox preferences panel and select the network section. Select Host-only Networks. once Vitual-Box is selected click on file —> click on HOST NETWORK MANAGER and Create a new network, and edit the network configuration. In the Adapter section, enter the following settings:
+IPv4 Address: 192.168.56.1 IPv4 Network Mask: 255.255.255.0
+In the DHCP Server section, enter the following settings:
+Check the Enable Server box Server Address: 192.168.56.1 Server Mask: 255.255.255.0 Lower Address Bound: 192.168.56.110 Upper Address Bound: 192.168.56.200
+Click OK to accept the adapter configuration changes, and again to exit the preferences dialog. Open the settings section for the Learning VM from the VirtualBox Manager window. Go to the Network section, select Host-only Adapter from the drop-down menu, and select the name of the host-only adapter you created from the Name: drop-down. Click OK to accept the setting change.
+
+You can import and start the servers and should work as long you followed the rule above.
+You can also make a snapshot of the VMs prior changing them incase you want to go back to initial state.
+
+
+Thanks for the chalenge!
+
+users: root, passwd test10: max ruas sudo user password test10
+Mongo shell, LoadBalancer and mongo admin: Mongo1 192.168.56.105
+Webserver1, mongo2:					               Mongo2 192.168.56.106
+Webserver2, mongo3					               Mongo3 192.168.56.107
+
+http://192.168.56.105:28017/ to access mongo-web interface
+http://192.168.56.105/ or https://192.168.56.105/ for webapp.
+
+database admin: maxdb password:maxdb
+
+
+
+
+
+
+
+
+
+
+
+set up of the servers for Mongo.
+make a static IP for mongol 1,2,3 
+mongo1 = 192.168.56.105
+mongo2 = 192.168.56.106
+mongo3 = 192.168.56.107
+
+I followed this article: http://blog.secaserver.com/2013/03/centos-install-configure-mongodb-sharded-cluster/
+
+Install MongoDB this uses mongodb2.4
+1. Install EPEL repo:
+$ rpm -Uhv http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+2. Install MongoDB and all required components:
+$ yum install mongodb* -y --enablerepo=epel
+ 
+Config Servers
+
+1. Create config database directory. By default, MongoDB will use /data/configdb:
+$ mkdir -p /data/configdb
+2. Default port for config server is 27019. Start config servers:
+$ mongod --configsvr --fork --logpath /var/log/mongodb/mongodb.log --logappend
+You should see following output:
+forked process: 5464
+all output going to: /var/log/mongodb/mongodb.log
+child process started successfully, parent exiting
+ 
+Routing Servers
+1. By default, mongos will listen on port 27017. Start mongos as below on each server:
+ssh to mogo1
+$ mongos --configdb mongo1 --fork --logpath /var/log/mongodb/mongodb.log --logappend
+ssh to mongo2
+$ mongos --configdb mongo2 --fork --logpath /var/log/mongodb/mongodb.log --logappend
+ssh to mongo3
+$ mongos --configdb mongo3 --fork --logpath /var/log/mongodb/mongodb.log --logappend
+
+You should see following output:
+forked process: 5534
+all output going to: /var/log/mongodb/mongodb.log
+child process started successfully, parent exiting
+Shard Servers
+1. Create default data directory. By default, MongoDB will use /data/db:
+$ mkdir -p /data/db
+chown mongodb: -R /data/db
+2. By default, mongod with –shardsvr option will listen on port 27018. Start mongod as below:
+$ mongod --shardsvr --fork --logpath /var/log/mongodb/mongodb.log --logappend
+You should see following output:
+forked process: 5675
+all output going to: /var/log/mongodb/mongodb.log
+child process started successfully, parent exiting
+ 
+MongoDB Sharding
+1. Verify that MongoDB services are listening to correct ports:
+$ netstat -tulpn | grep mongo
+ 
+tcp     0    0      0.0.0.0:27017     0.0.0.0:*     LISTEN    5534/mongos
+tcp     0    0      0.0.0.0:27018     0.0.0.0:*     LISTEN    5675/mongod
+tcp     0    0      0.0.0.0:27019     0.0.0.0:*     LISTEN    5464/mongod
+tcp     0    0      0.0.0.0:28017     0.0.0.0:*     LISTEN    5534/mongos
+tcp     0    0      0.0.0.0:28018     0.0.0.0:*     LISTEN    5675/mongod
+tcp     0    0      0.0.0.0:28019     0.0.0.0:*     LISTEN    5464/mongod
+2. SSH into mongo1 and type mongo to access the mongos console:
+$ mongo
+3. Use admin database to list the sharding status:
+mongos> use admin
+mongos> db.runCommand( { listshards : 1 } );
+You should get this reply:
+{ "shards" : [ ], "ok" : 1 }
+4. Add the sharded servers by specifying the hostname and MongoDB shard service port:
+mongos> sh.addShard( "mongo1:27018");
+{ "shardAdded" : "shard0000", "ok" : 1 }
+mongos> sh.addShard( "mongo2:27018");
+{ "shardAdded" : "shard0001", "ok" : 1 }
+mongos> sh.addShard( "mongo3:27018");
+{ "shardAdded" : "shard0002", "ok" : 1 }
+5. Download this JSON example file and import into database mydb:
+$ wget http://media.mongodb.org/zips.json
+$ mongoimport --db mydb --collection zip --file zips.json
+connected to: 127.0.0.1
+Mon Mar 25 06:22:35 imported 29470 objects
+6. Enable sharding for mydb:
+mongos> sh.enableSharding ("mydb");
+{ "ok" : 1 }
+7. Check sharding status:
+mongos> sh.status()
+--- Sharding Status ---
+sharding version: { "_id" : 1, "version" : 3 }
+shards:
+{ "_id" : "shard0000", "host" : "mongo1:27018" }
+{ "_id" : "shard0001", "host" : "mongo2:27018" }
+{ "_id" : "shard0002", "host" : "mongo3:27018" }
+databases:
+{ "_id" : "admin", "partitioned" : false, "primary" : "config" }
+{ "_id" : "mydb", "partitioned" : true, "primary" : "shard0000" }
+{ "_id" : "test", "partitioned" : false, "primary" : "shard0001" }
+
+
+
+ the is a few things to consider:
+file permission used by mongodb, IPtables and SElinux.
+
+to start mongo successfully run the below commands. this is added to the run level of the VMs so no need to do this as they will run prior start of the server.
+mongod --configsvr --fork --logpath /var/log/mongodb/mongodb.log --logappend (run on all 3 servers first)
+mongos --configdb mongo1,mongo2,mongo3 --fork --logpath /var/log/mongodb/mongodb.log --logappend
+mongod --shardsvr --fork --logpath /var/log/mongodb.log --logappend
+
+
+add user to a database:
+use <database>
+use admin
+db.addUser( { user: “maxdb”, pwd: “maxdb”, roles: [ "readWrite" ] } )
+
+
+use mydb
+db.addUser( { user: “maxdb”, pwd: “maxdb”, roles: [ "readWrite", "dbAdmin" ]} )
+
+example of insertion:
+db.mydb.insert( { item: “job”, qty: 15 } )
+db.mydb.find( { item: “job”} )
+
+example of bios insertion:
+db.bios.insert(
+   {
+     name: { first: ‘Max’, last: ‘Ruas’ },
+     birth: new Date(‘March 03, 1988’),
+     contribs: [ 'Linux’, 'Artificial Intelligence', ‘REDHAT’ ],
+     awards: [
+               {
+                 award: ‘Max Reuter Ruas RedHat’,
+                 year: 2015,
+                 by: ‘RedHat’
+               },
+               {
+                 award: ‘Max Ruas’,
+                 year: 2015,
+                 by: ’Splunk’
+               },
+               {
+                 award: ‘GCSEs’,
+                 year: 2005,
+                 by: ‘Fowey Community college’
+               }
+             ]
+   }
+)
+
+
+
+example of ip tables:
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 27017 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A OUTPUT -d 192.168.56.105/24 -p tcp --source-port 27017 -m state --state ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 27019 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A OUTPUT -d 192.168.56.105/24 -p tcp --source-port 27019 -m state --state ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 27019 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 27018 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A OUTPUT -d 192.168.56.105/24 -p tcp --source-port 27018 -m state --state ESTABLISHED -j ACCEPT
+-A OUTPUT -d 192.168.56.105/24 -p tcp --source-port 27018 -m state --state ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 28017 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 28018 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 28019 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A INPUT -s 192.168.56.105/24 -p tcp --destination-port 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+-P INPUT DROP
+
+-P OUTPUT DROP
+
+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+this is the example I used for this: http://unixadminschool.com/blog/2017/04/load-balancing-web-server-using-pound-load-balancer/
+
+
+Load balancers are used to improve the performance of infrastructure, whether they are being used to improve performance of a single system by distributing load across various network interfaces or load balancing might be used to distribute load of a web server across several backend servers.
+A use case scenario for using Load balancing might be a website that attracts lots of traffic,  using load balancing leads to increased server functionality, decreased traffic congestion which leads to faster page loading.
+In this tutorial we are going to discuss POUND load balancer. Pound load balancer acts as a reverse proxy that evenly distributes incoming traffic/requests received from port 80 or 443 (or both)  across two or more backend web servers.
+When Pound Load balancer is configured, it will be the public facing server that means extra layer of security for websites as pound will act as a reverse proxy & when requests are received at Pound server, it will then evenly forward the requests to backend web servers & then replies back to end user after the requests have been processed.
+Things you will need 
+To configure a pound server we will need following,
+1- Two servers with Apache installed, these will acts our backend web servers,
+2- A server with POUND load balancer installed.
+Example setup
+We will using the following setup for setting up our load balancer,
+Pound server
+Hostname- mongo1                                IP address- 192.168.56.105
+
+ Apache Servers
+Hostname- mongo2                                IP address- 192.168.56.106
+Hostname- mongo3                                IP address- 192.168.56.107
+
+Step 1- Web Server Installation
+Firstly we need to prepare apache web servers which will act as our backend machines. To install apache, run following command on both the servers,
+# yum install httpd
+After installation has been done on both machines, we will move onto configuration part.
+Step 2 – Web Server configuration
+Next step is creating an Index.html file to identify both web servers. To create one, go to /var/www/html & create an index.html page using commands below,
+# cd /var/www/html
+
+# echo “This is Hello World server 1” > index.html
+Similarly create index.html page on server 2 as well but change “This is web server 1” to “This is web server 2”
+Restart apache services on both machines to implement the changes,
+# service httpd restart
+We can check if the index.html pages are working or not by entering the IP address or FQDN (Fully Qualified Domain Name) of the machine into your internet browser.
+ Step 3 – Pound server Installation
+To install Pound server, we first have to enable EPEL repository as Pound Load balancer is not available with default repositories. To enable EPEL repository, run
+# rpm -Uvh https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-8.noarch.rpm
+Once the repo has been installed, we will install pound by running,
+# yum install pound
+Step 4 – Pound server configuration
+The configuration file for Pound load balancer is /etc/pound.cfg. To configure load balancing, we will edit this file,
+# vi /etc/pound.cfg
+Now make changes to the file as done below,
+ListenHTTP
+
+Address 192.168.56.105
+Port 80
+End
+ 
+ListenHTTPS
+Address 192.168.56.105
+Port    443
+Cert    “/var/lib/pound/pound.cfg”
+End
+ 
+Service
+BackEnd
+Address 192.168.56.106
+Port    80
+End
+ 
+BackEnd
+Address 192.168.56.107
+Port    80
+End
+End
+Save the file & exit it.
+NOTE:- Remove the section with ListenHTTPS if not using HTTPS.
+Now restart the pound services to implement changes to the configuration file,
+# service pound restart
+Step 5 – Testing the load balancer
+Now to make sure that our load balancer is properly configured & working fine, we will test the load balancer. To test the load balancer,  open the web browser & enter the Pound server’s IP address i.e. 192.168.1.100. It will open the web page saying “This is web server 1 ”, refresh the page & you will then be redirected to web server 2, keep refreshing & you will see that one request goes to server 1 & then to server 2. So that means our Pound load balancer is working as it is supposed to.
+This completes our tutorial on Pound Load balancer. If you are having any doubts/questions, feel free to mention them in the comment box down below.
+
+
+
