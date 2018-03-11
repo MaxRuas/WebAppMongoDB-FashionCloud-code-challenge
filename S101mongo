@@ -1,0 +1,3 @@
+#!/bin/sh
+#
+/usr/bin/mongos --configdb mongo1 --fork --logpath /var/log/mongodb/mongodb.log --logappend
